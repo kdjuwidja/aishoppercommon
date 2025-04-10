@@ -1,8 +1,7 @@
 package logger
 
 import (
-	"os"
-
+	"github.com/kdjuwidja/aishoppercommon/osutil"
 	"github.com/sirupsen/logrus"
 )
 
@@ -10,28 +9,38 @@ var l *logrus.Logger
 
 var serviceName string
 
-func Init(s string) error {
+func init() {
 	l = logrus.New()
 	l.SetFormatter(&logrus.JSONFormatter{})
 
-	serviceName = s
-
-	level := os.Getenv("LOG_LEVEL")
-	if level == "" {
-		level = "info"
-	}
+	serviceName = osutil.GetEnvString("SERVICE_NAME", "undefined")
+	level := osutil.GetEnvString("LOG_LEVEL", "info")
 
 	lvl, err := logrus.ParseLevel(level)
 	if err != nil {
-		return err
+		lvl = logrus.InfoLevel
 	}
 	l.SetLevel(lvl)
-
-	return nil
 }
 
-func Close() {
-	l = nil
+func SetLevel(level string) {
+	lvl, err := logrus.ParseLevel(level)
+	if err != nil {
+		lvl = logrus.InfoLevel
+	}
+	l.SetLevel(lvl)
+}
+
+func GetLevel() logrus.Level {
+	return l.GetLevel()
+}
+
+func SetServiceName(name string) {
+	serviceName = name
+}
+
+func GetServiceName() string {
+	return serviceName
 }
 
 func Info(args ...interface{}) {
