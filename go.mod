@@ -1,4 +1,4 @@
-module netherrealmstudio.com/aishoppercommon
+module github.com/kdjuwidja/aishoppercommon
 
 go 1.24.0
 
