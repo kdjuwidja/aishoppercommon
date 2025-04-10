@@ -3,148 +3,252 @@ package logger
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
-// Helper function to create a logger with a buffer output
-func setupTestLogger(serviceName, level string) (*Logger, *bytes.Buffer) {
-	logger := Initialize(serviceName, level)
-
+// Helper function to capture log output
+func captureLogOutput() *bytes.Buffer {
 	var buf bytes.Buffer
-	logger.logger.SetOutput(&buf)
-
-	return logger, &buf
+	l.SetOutput(&buf)
+	return &buf
 }
 
 // Helper function to parse log output
 func parseLogOutput(buf *bytes.Buffer) (map[string]interface{}, error) {
+	// Get the last line of output (in case there are multiple lines)
+	output := buf.String()
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) == 0 {
+		return nil, nil
+	}
+	lastLine := lines[len(lines)-1]
+
 	var result map[string]interface{}
-	err := json.Unmarshal(buf.Bytes(), &result)
+	err := json.Unmarshal([]byte(lastLine), &result)
 	return result, err
 }
 
-func TestInitialize(t *testing.T) {
-	// Test with valid parameters
-	logger := Initialize("test-service", "debug")
-	assert.Equal(t, "test-service", logger.GetServiceName())
-	assert.Equal(t, logrus.DebugLevel, logger.GetLevel())
+func TestSetLevel(t *testing.T) {
+	// Save original level
+	originalLevel := l.GetLevel()
 
-	// Test with empty level (should default to info)
-	logger = Initialize("test-service", "")
-	assert.Equal(t, logrus.InfoLevel, logger.GetLevel())
+	// Test valid level
+	SetLevel("debug")
+	assert.Equal(t, logrus.DebugLevel, l.GetLevel())
 
-	// Test with invalid level (should default to info)
-	logger = Initialize("test-service", "invalid-level")
-	assert.Equal(t, logrus.InfoLevel, logger.GetLevel())
+	// Test invalid level
+	SetLevel("invalid")
+	assert.Equal(t, logrus.InfoLevel, l.GetLevel())
+
+	// Restore original level
+	l.SetLevel(originalLevel)
 }
 
-func TestSetLevel(t *testing.T) {
-	logger := Initialize("test-service", "info")
+func TestGetLevel(t *testing.T) {
+	// Save original level
+	originalLevel := l.GetLevel()
 
-	// Test setting level
-	logger.SetLevel(logrus.DebugLevel)
-	assert.Equal(t, logrus.DebugLevel, logger.GetLevel())
+	// Test getting level
+	l.SetLevel(logrus.DebugLevel)
+	assert.Equal(t, logrus.DebugLevel, GetLevel())
+
+	// Restore original level
+	l.SetLevel(originalLevel)
+}
+
+func TestSetServiceName(t *testing.T) {
+	// Save original service name
+	originalName := serviceName
+
+	// Test setting service name
+	SetServiceName("new-service")
+	assert.Equal(t, "new-service", serviceName)
+
+	// Restore original service name
+	serviceName = originalName
+}
+
+func TestGetServiceName(t *testing.T) {
+	// Save original service name
+	originalName := serviceName
+
+	// Test getting service name
+	serviceName = "test-service"
+	assert.Equal(t, "test-service", GetServiceName())
+
+	// Restore original service name
+	serviceName = originalName
 }
 
 func TestInfo(t *testing.T) {
-	logger, buf := setupTestLogger("test-service", "info")
+	// Save original level
+	originalLevel := l.GetLevel()
+	l.SetLevel(logrus.InfoLevel)
 
-	// Test Info
-	logger.Info("test message")
+	// Setup
+	buf := captureLogOutput()
 
+	// Test
+	Info("test message")
+
+	// Verify
 	result, err := parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "test message", result["msg"])
 	assert.Equal(t, "info", result["level"])
-	assert.Equal(t, "test-service", result["service"])
+	assert.Equal(t, serviceName, result["service"])
 
 	// Test Infof
 	buf.Reset()
-	logger.Infof("test %s", "message")
+	Infof("test %s", "message")
 
 	result, err = parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "test message", result["msg"])
 	assert.Equal(t, "info", result["level"])
-	assert.Equal(t, "test-service", result["service"])
+	assert.Equal(t, serviceName, result["service"])
+
+	// Restore original level
+	l.SetLevel(originalLevel)
 }
 
 func TestError(t *testing.T) {
-	logger, buf := setupTestLogger("test-service", "info")
+	// Save original level
+	originalLevel := l.GetLevel()
+	l.SetLevel(logrus.ErrorLevel)
 
-	// Test Error
-	logger.Error("error message")
+	// Setup
+	buf := captureLogOutput()
 
+	// Test
+	Error("error message")
+
+	// Verify
 	result, err := parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "error message", result["msg"])
 	assert.Equal(t, "error", result["level"])
-	assert.Equal(t, "test-service", result["service"])
+	assert.Equal(t, serviceName, result["service"])
 
 	// Test Errorf
 	buf.Reset()
-	logger.Errorf("error %s", "message")
+	Errorf("error %s", "message")
 
 	result, err = parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "error message", result["msg"])
 	assert.Equal(t, "error", result["level"])
-	assert.Equal(t, "test-service", result["service"])
+	assert.Equal(t, serviceName, result["service"])
+
+	// Restore original level
+	l.SetLevel(originalLevel)
 }
 
 func TestDebug(t *testing.T) {
-	logger, buf := setupTestLogger("test-service", "debug")
+	// Save original level
+	originalLevel := l.GetLevel()
+	l.SetLevel(logrus.DebugLevel)
 
-	// Test Debug
-	logger.Debug("debug message")
+	// Setup
+	buf := captureLogOutput()
 
+	// Test
+	Debug("debug message")
+
+	// Verify
 	result, err := parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "debug message", result["msg"])
 	assert.Equal(t, "debug", result["level"])
-	assert.Equal(t, "test-service", result["service"])
+	assert.Equal(t, serviceName, result["service"])
 
 	// Test Debugf
 	buf.Reset()
-	logger.Debugf("debug %s", "message")
+	Debugf("debug %s", "message")
 
 	result, err = parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "debug message", result["msg"])
 	assert.Equal(t, "debug", result["level"])
-	assert.Equal(t, "test-service", result["service"])
+	assert.Equal(t, serviceName, result["service"])
+
+	// Restore original level
+	l.SetLevel(originalLevel)
 }
 
 func TestWarn(t *testing.T) {
-	logger, buf := setupTestLogger("test-service", "info")
+	// Save original level
+	originalLevel := l.GetLevel()
+	l.SetLevel(logrus.WarnLevel)
 
-	// Test Warn
-	logger.Warn("warning message")
+	// Setup
+	buf := captureLogOutput()
 
+	// Test
+	Warn("warning message")
+
+	// Verify
 	result, err := parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "warning message", result["msg"])
 	assert.Equal(t, "warning", result["level"])
-	assert.Equal(t, "test-service", result["service"])
+	assert.Equal(t, serviceName, result["service"])
 
 	// Test Warnf
 	buf.Reset()
-	logger.Warnf("warning %s", "message")
+	Warnf("warning %s", "message")
 
 	result, err = parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "warning message", result["msg"])
 	assert.Equal(t, "warning", result["level"])
-	assert.Equal(t, "test-service", result["service"])
+	assert.Equal(t, serviceName, result["service"])
+
+	// Restore original level
+	l.SetLevel(originalLevel)
 }
 
-func TestClose(t *testing.T) {
-	logger := Initialize("test-service", "info")
+func TestTrace(t *testing.T) {
+	// Save original level
+	originalLevel := l.GetLevel()
+	l.SetLevel(logrus.TraceLevel)
 
-	// Test Close
-	logger.Close()
-	assert.Nil(t, logger.logger)
+	// Setup
+	buf := captureLogOutput()
+
+	// Test
+	Trace("trace message")
+
+	// Verify
+	result, err := parseLogOutput(buf)
+	assert.NoError(t, err)
+	assert.Equal(t, "trace message", result["msg"])
+	assert.Equal(t, "trace", result["level"])
+	assert.Equal(t, serviceName, result["service"])
+
+	// Test Tracef
+	buf.Reset()
+	Tracef("trace %s", "message")
+
+	result, err = parseLogOutput(buf)
+	assert.NoError(t, err)
+	assert.Equal(t, "trace message", result["msg"])
+	assert.Equal(t, "trace", result["level"])
+	assert.Equal(t, serviceName, result["service"])
+
+	// Restore original level
+	l.SetLevel(originalLevel)
+}
+
+// Note: We can't fully test Fatal, Fatalf, Panic, and Panicf as they terminate the program
+// But we can verify they exist and compile
+func TestFatalExists(t *testing.T) {
+	_ = Fatal
+	_ = Fatalf
+	_ = Panic
+	_ = Panicf
 }
