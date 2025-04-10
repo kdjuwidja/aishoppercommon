@@ -10,7 +10,8 @@ type Logger struct {
 	level       logrus.Level
 }
 
-func (l *Logger) Initialize(serviceName string, level string) {
+func Initialize(serviceName string, level string) *Logger {
+	l := &Logger{}
 	l.logger = logrus.New()
 	l.logger.SetFormatter(&logrus.JSONFormatter{})
 
@@ -26,6 +27,8 @@ func (l *Logger) Initialize(serviceName string, level string) {
 
 	l.level = lvl
 	l.logger.SetLevel(lvl)
+
+	return l
 }
 
 func (l *Logger) GetServiceName() string {

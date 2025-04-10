@@ -11,8 +11,7 @@ import (
 
 // Helper function to create a logger with a buffer output
 func setupTestLogger(serviceName, level string) (*Logger, *bytes.Buffer) {
-	logger := &Logger{}
-	logger.Initialize(serviceName, level)
+	logger := Initialize(serviceName, level)
 
 	var buf bytes.Buffer
 	logger.logger.SetOutput(&buf)
@@ -28,27 +27,22 @@ func parseLogOutput(buf *bytes.Buffer) (map[string]interface{}, error) {
 }
 
 func TestInitialize(t *testing.T) {
-	logger := &Logger{}
-
 	// Test with valid parameters
-	logger.Initialize("test-service", "debug")
+	logger := Initialize("test-service", "debug")
 	assert.Equal(t, "test-service", logger.GetServiceName())
 	assert.Equal(t, logrus.DebugLevel, logger.GetLevel())
 
 	// Test with empty level (should default to info)
-	logger = &Logger{}
-	logger.Initialize("test-service", "")
+	logger = Initialize("test-service", "")
 	assert.Equal(t, logrus.InfoLevel, logger.GetLevel())
 
 	// Test with invalid level (should default to info)
-	logger = &Logger{}
-	logger.Initialize("test-service", "invalid-level")
+	logger = Initialize("test-service", "invalid-level")
 	assert.Equal(t, logrus.InfoLevel, logger.GetLevel())
 }
 
 func TestSetLevel(t *testing.T) {
-	logger := &Logger{}
-	logger.Initialize("test-service", "info")
+	logger := Initialize("test-service", "info")
 
 	// Test setting level
 	logger.SetLevel(logrus.DebugLevel)
@@ -148,8 +142,7 @@ func TestWarn(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
-	logger := &Logger{}
-	logger.Initialize("test-service", "info")
+	logger := Initialize("test-service", "info")
 
 	// Test Close
 	logger.Close()
