@@ -3,256 +3,155 @@ package logger
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestInit(t *testing.T) {
-	// Test default level (info)
-	err := Init("test")
-	assert.NoError(t, err)
+// Helper function to create a logger with a buffer output
+func setupTestLogger(serviceName, level string) (*Logger, *bytes.Buffer) {
+	logger := &Logger{}
+	logger.Initialize(serviceName, level)
 
-	// Test with custom level
-	os.Setenv("LOG_LEVEL", "debug")
-	err = Init("test")
-	assert.NoError(t, err)
+	var buf bytes.Buffer
+	logger.logger.SetOutput(&buf)
 
-	// Test with invalid level
-	os.Setenv("LOG_LEVEL", "invalid")
-	err = Init("test")
-	assert.Error(t, err)
+	return logger, &buf
+}
+
+// Helper function to parse log output
+func parseLogOutput(buf *bytes.Buffer) (map[string]interface{}, error) {
+	var result map[string]interface{}
+	err := json.Unmarshal(buf.Bytes(), &result)
+	return result, err
+}
+
+func TestInitialize(t *testing.T) {
+	logger := &Logger{}
+
+	// Test with valid parameters
+	logger.Initialize("test-service", "debug")
+	assert.Equal(t, "test-service", logger.GetServiceName())
+	assert.Equal(t, logrus.DebugLevel, logger.GetLevel())
+
+	// Test with empty level (should default to info)
+	logger = &Logger{}
+	logger.Initialize("test-service", "")
+	assert.Equal(t, logrus.InfoLevel, logger.GetLevel())
+
+	// Test with invalid level (should default to info)
+	logger = &Logger{}
+	logger.Initialize("test-service", "invalid-level")
+	assert.Equal(t, logrus.InfoLevel, logger.GetLevel())
+}
+
+func TestSetLevel(t *testing.T) {
+	logger := &Logger{}
+	logger.Initialize("test-service", "info")
+
+	// Test setting level
+	logger.SetLevel(logrus.DebugLevel)
+	assert.Equal(t, logrus.DebugLevel, logger.GetLevel())
 }
 
 func TestInfo(t *testing.T) {
-	// Setup
-	Init("test")
-	var buf bytes.Buffer
-	l.SetOutput(&buf)
+	logger, buf := setupTestLogger("test-service", "info")
 
-	// Test
-	Info("test message")
+	// Test Info
+	logger.Info("test message")
 
-	// Verify
-	var result map[string]interface{}
-	err := json.Unmarshal(buf.Bytes(), &result)
+	result, err := parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "test message", result["msg"])
 	assert.Equal(t, "info", result["level"])
-	assert.Equal(t, "test", result["service"])
-}
+	assert.Equal(t, "test-service", result["service"])
 
-func TestInfof(t *testing.T) {
-	// Setup
-	Init("test")
-	var buf bytes.Buffer
-	l.SetOutput(&buf)
+	// Test Infof
+	buf.Reset()
+	logger.Infof("test %s", "message")
 
-	// Test
-	Infof("test %s", "message")
-
-	// Verify
-	var result map[string]interface{}
-	err := json.Unmarshal(buf.Bytes(), &result)
+	result, err = parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "test message", result["msg"])
 	assert.Equal(t, "info", result["level"])
-	assert.Equal(t, "test", result["service"])
+	assert.Equal(t, "test-service", result["service"])
 }
 
 func TestError(t *testing.T) {
-	// Setup
-	Init("test")
-	var buf bytes.Buffer
-	l.SetOutput(&buf)
+	logger, buf := setupTestLogger("test-service", "info")
 
-	// Test
-	Error("error message")
+	// Test Error
+	logger.Error("error message")
 
-	// Verify
-	var result map[string]interface{}
-	err := json.Unmarshal(buf.Bytes(), &result)
+	result, err := parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "error message", result["msg"])
 	assert.Equal(t, "error", result["level"])
-	assert.Equal(t, "test", result["service"])
-}
+	assert.Equal(t, "test-service", result["service"])
 
-func TestErrorf(t *testing.T) {
-	// Setup
-	Init("test")
-	var buf bytes.Buffer
-	l.SetOutput(&buf)
+	// Test Errorf
+	buf.Reset()
+	logger.Errorf("error %s", "message")
 
-	// Test
-	Errorf("error %s", "message")
-
-	// Verify
-	var result map[string]interface{}
-	err := json.Unmarshal(buf.Bytes(), &result)
+	result, err = parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "error message", result["msg"])
 	assert.Equal(t, "error", result["level"])
-	assert.Equal(t, "test", result["service"])
+	assert.Equal(t, "test-service", result["service"])
 }
 
 func TestDebug(t *testing.T) {
-	// Setup
-	os.Setenv("LOG_LEVEL", "debug")
-	Init("test")
-	var buf bytes.Buffer
-	l.SetOutput(&buf)
+	logger, buf := setupTestLogger("test-service", "debug")
 
-	// Test
-	Debug("debug message")
+	// Test Debug
+	logger.Debug("debug message")
 
-	// Verify
-	var result map[string]interface{}
-	err := json.Unmarshal(buf.Bytes(), &result)
+	result, err := parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "debug message", result["msg"])
 	assert.Equal(t, "debug", result["level"])
-	assert.Equal(t, "test", result["service"])
-}
+	assert.Equal(t, "test-service", result["service"])
 
-func TestDebugf(t *testing.T) {
-	// Setup
-	os.Setenv("LOG_LEVEL", "debug")
-	Init("test")
-	var buf bytes.Buffer
-	l.SetOutput(&buf)
+	// Test Debugf
+	buf.Reset()
+	logger.Debugf("debug %s", "message")
 
-	// Test
-	Debugf("debug %s", "message")
-
-	// Verify
-	var result map[string]interface{}
-	err := json.Unmarshal(buf.Bytes(), &result)
+	result, err = parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "debug message", result["msg"])
 	assert.Equal(t, "debug", result["level"])
-	assert.Equal(t, "test", result["service"])
+	assert.Equal(t, "test-service", result["service"])
 }
 
 func TestWarn(t *testing.T) {
-	// Setup
-	Init("test")
-	var buf bytes.Buffer
-	l.SetOutput(&buf)
+	logger, buf := setupTestLogger("test-service", "info")
 
-	// Test
-	Warn("warning message")
+	// Test Warn
+	logger.Warn("warning message")
 
-	// Verify
-	var result map[string]interface{}
-	err := json.Unmarshal(buf.Bytes(), &result)
+	result, err := parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "warning message", result["msg"])
 	assert.Equal(t, "warning", result["level"])
-	assert.Equal(t, "test", result["service"])
-}
+	assert.Equal(t, "test-service", result["service"])
 
-func TestWarnf(t *testing.T) {
-	// Setup
-	Init("test")
-	var buf bytes.Buffer
-	l.SetOutput(&buf)
+	// Test Warnf
+	buf.Reset()
+	logger.Warnf("warning %s", "message")
 
-	// Test
-	Warnf("warning %s", "message")
-
-	// Verify
-	var result map[string]interface{}
-	err := json.Unmarshal(buf.Bytes(), &result)
+	result, err = parseLogOutput(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, "warning message", result["msg"])
 	assert.Equal(t, "warning", result["level"])
-	assert.Equal(t, "test", result["service"])
+	assert.Equal(t, "test-service", result["service"])
 }
 
-func TestFatal(t *testing.T) {
-	// Setup
-	Init("test")
-	var buf bytes.Buffer
-	l.SetOutput(&buf)
+func TestClose(t *testing.T) {
+	logger := &Logger{}
+	logger.Initialize("test-service", "info")
 
-	// Test
-	// Note: We can't actually test Fatal as it calls os.Exit(1)
-	// Instead, we'll just verify the function exists and compiles
-	_ = Fatal
-}
-
-func TestFatalf(t *testing.T) {
-	// Setup
-	Init("test")
-	var buf bytes.Buffer
-	l.SetOutput(&buf)
-
-	// Test
-	// Note: We can't actually test Fatalf as it calls os.Exit(1)
-	// Instead, we'll just verify the function exists and compiles
-	_ = Fatalf
-}
-
-func TestPanic(t *testing.T) {
-	// Setup
-	Init("test")
-	var buf bytes.Buffer
-	l.SetOutput(&buf)
-
-	// Test
-	// Note: We can't actually test Panic as it calls panic()
-	// Instead, we'll just verify the function exists and compiles
-	_ = Panic
-}
-
-func TestPanicf(t *testing.T) {
-	// Setup
-	Init("test")
-	var buf bytes.Buffer
-	l.SetOutput(&buf)
-
-	// Test
-	// Note: We can't actually test Panicf as it calls panic()
-	// Instead, we'll just verify the function exists and compiles
-	_ = Panicf
-}
-
-func TestTrace(t *testing.T) {
-	// Setup
-	os.Setenv("LOG_LEVEL", "trace")
-	Init("test")
-	var buf bytes.Buffer
-	l.SetOutput(&buf)
-
-	// Test
-	Trace("trace message")
-
-	// Verify
-	var result map[string]interface{}
-	err := json.Unmarshal(buf.Bytes(), &result)
-	assert.NoError(t, err)
-	assert.Equal(t, "trace message", result["msg"])
-	assert.Equal(t, "trace", result["level"])
-	assert.Equal(t, "test", result["service"])
-}
-
-func TestTracef(t *testing.T) {
-	// Setup
-	os.Setenv("LOG_LEVEL", "trace")
-	Init("test")
-	var buf bytes.Buffer
-	l.SetOutput(&buf)
-
-	// Test
-	Tracef("trace %s", "message")
-
-	// Verify
-	var result map[string]interface{}
-	err := json.Unmarshal(buf.Bytes(), &result)
-	assert.NoError(t, err)
-	assert.Equal(t, "trace message", result["msg"])
-	assert.Equal(t, "trace", result["level"])
-	assert.Equal(t, "test", result["service"])
+	// Test Close
+	logger.Close()
+	assert.Nil(t, logger.logger)
 }
