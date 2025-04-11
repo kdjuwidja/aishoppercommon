@@ -22,7 +22,8 @@ type MySQLConnectionPool struct {
 	db *gorm.DB
 }
 
-func (c *MySQLConnectionPool) Configure(user, password, host, port, dbName string, maxOpenConns, maxIdleConns int, models []interface{}) {
+func InitializeMySQLConnectionPool(user, password, host, port, dbName string, maxOpenConns, maxIdleConns int, models []interface{}) (*MySQLConnectionPool, error) {
+	c := &MySQLConnectionPool{}
 	c.User = user
 	c.Password = password
 	c.Host = host
@@ -31,11 +32,9 @@ func (c *MySQLConnectionPool) Configure(user, password, host, port, dbName strin
 	c.MaxOpenConns = maxOpenConns
 	c.MaxIdleConns = maxIdleConns
 	c.models = models
-}
 
-func (c *MySQLConnectionPool) Initialize() error {
 	if c.User == "" || c.Password == "" || c.Host == "" || c.Port == "" || c.DBName == "" {
-		return fmt.Errorf("missing required configuration parameters")
+		return nil, fmt.Errorf("missing required configuration parameters")
 	}
 
 	var err error
@@ -45,17 +44,17 @@ func (c *MySQLConnectionPool) Initialize() error {
 
 	c.db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	sqlDB, err := c.db.DB()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	sqlDB.SetMaxOpenConns(c.MaxOpenConns)
 	sqlDB.SetMaxIdleConns(c.MaxIdleConns)
-	return err
+	return c, nil
 }
 
 func (c *MySQLConnectionPool) AutoMigrate() error {

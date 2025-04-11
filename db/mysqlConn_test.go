@@ -34,38 +34,23 @@ type TestAPIClient struct {
 
 // setupTestPool creates and configures a test connection pool
 func setupTestPool(t *testing.T) *MySQLConnectionPool {
-	pool := &MySQLConnectionPool{}
-	pool.Configure("ai_shopper_dev", "password", "localhost", "4306", "test_db", 10, 5, []interface{}{&TestModel{}})
+	pool, err := InitializeMySQLConnectionPool(
+		"ai_shopper_dev",
+		"password",
+		"localhost",
+		"4306",
+		"test_db",
+		10,
+		5,
+		[]interface{}{&TestModel{}},
+	)
+	assert.NoError(t, err)
 	return pool
-}
-
-func TestMySQLConnectionPool_Configure(t *testing.T) {
-	pool := &MySQLConnectionPool{}
-
-	// Test valid configuration
-	pool.Configure("ai_shopper_dev", "password", "localhost", "4306", "test_db", 10, 5, []interface{}{&TestModel{}})
-
-	assert.Equal(t, "ai_shopper_dev", pool.User)
-	assert.Equal(t, "password", pool.Password)
-	assert.Equal(t, "localhost", pool.Host)
-	assert.Equal(t, "4306", pool.Port)
-	assert.Equal(t, "test_db", pool.DBName)
-	assert.Equal(t, 10, pool.MaxOpenConns)
-	assert.Equal(t, 5, pool.MaxIdleConns)
-	assert.Len(t, pool.models, 1)
 }
 
 func TestMySQLConnectionPool_Initialize_Validation(t *testing.T) {
 	// Test missing configuration
-	pool := &MySQLConnectionPool{}
-	err := pool.Initialize()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "missing required configuration parameters")
-
-	// Test with empty values
-	pool = &MySQLConnectionPool{}
-	pool.Configure("", "", "", "", "", 0, 0, nil)
-	err = pool.Initialize()
+	_, err := InitializeMySQLConnectionPool("", "", "", "", "", 0, 0, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "missing required configuration parameters")
 }
@@ -76,10 +61,7 @@ func TestMySQLConnectionPool_Integration(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	pool := &MySQLConnectionPool{}
-
-	// Configure with real database credentials and actual models
-	pool.Configure(
+	pool, err := InitializeMySQLConnectionPool(
 		"ai_shopper_dev",
 		"password",
 		"localhost",
@@ -92,9 +74,6 @@ func TestMySQLConnectionPool_Integration(t *testing.T) {
 			&TestAPIClient{},
 		},
 	)
-
-	// Test initialization
-	err := pool.Initialize()
 	assert.NoError(t, err)
 
 	// Test GetDB
@@ -171,9 +150,6 @@ func TestMySQLConnectionPool_GetDB(t *testing.T) {
 
 	// Test after initialization
 	pool = setupTestPool(t)
-	err := pool.Initialize()
-	assert.NoError(t, err)
-
 	db := pool.GetDB()
 	assert.NotNil(t, db)
 
@@ -189,9 +165,6 @@ func TestMySQLConnectionPool_Close(t *testing.T) {
 
 	// Test closing initialized pool
 	pool = setupTestPool(t)
-	err = pool.Initialize()
-	assert.NoError(t, err)
-
 	err = pool.Close()
 	assert.NoError(t, err)
 }
@@ -204,9 +177,6 @@ func TestMySQLConnectionPool_AutoMigrate(t *testing.T) {
 
 	// Test auto-migrate after initialization
 	pool = setupTestPool(t)
-	err = pool.Initialize()
-	assert.NoError(t, err)
-
 	err = pool.AutoMigrate()
 	assert.NoError(t, err)
 
@@ -223,9 +193,6 @@ func TestMySQLConnectionPool_DropTables(t *testing.T) {
 
 	// Test dropping tables after initialization and migration
 	pool = setupTestPool(t)
-	err = pool.Initialize()
-	assert.NoError(t, err)
-
 	err = pool.AutoMigrate()
 	assert.NoError(t, err)
 
@@ -234,4 +201,109 @@ func TestMySQLConnectionPool_DropTables(t *testing.T) {
 
 	// Clean up
 	pool.Close()
+}
+
+func TestMySQLConnectionPool_MultipleModelsMigration(t *testing.T) {
+	// Skip if not in integration test mode
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	pool, err := InitializeMySQLConnectionPool(
+		"ai_shopper_dev",
+		"password",
+		"localhost",
+		"4306",
+		"test_db",
+		10,
+		5,
+		[]interface{}{
+			&TestModel{},
+			&TestUser{},
+			&TestAPIClient{},
+		},
+	)
+	assert.NoError(t, err)
+
+	// Test GetDB
+	dbConn := pool.GetDB()
+	assert.NotNil(t, dbConn)
+
+	// Test AutoMigrate with multiple models
+	err = pool.AutoMigrate()
+	assert.NoError(t, err)
+
+	// Test database operations with TestModel
+	model := &TestModel{
+		Name: "Test Model",
+	}
+	result := dbConn.Create(model)
+	assert.NoError(t, result.Error)
+	assert.NotZero(t, model.ID)
+
+	// Test database operations with User model
+	user := &TestUser{
+		ID:       "test-user-2",
+		Email:    "test2@example.com",
+		Password: "hashedpassword2",
+		IsActive: true,
+	}
+	result = dbConn.Create(user)
+	assert.NoError(t, result.Error)
+	assert.NotEmpty(t, user.ID)
+
+	// Test database operations with APIClient model
+	apiClient := &TestAPIClient{
+		ID:          "test-client-2",
+		Secret:      "test-secret-2",
+		Domain:      "http://localhost:3001",
+		IsPublic:    false,
+		Description: "Test API Client 2",
+	}
+	result = dbConn.Create(apiClient)
+	assert.NoError(t, result.Error)
+	assert.NotEmpty(t, apiClient.ID)
+
+	// Verify all models were created correctly
+	var retrievedModel TestModel
+	result = dbConn.First(&retrievedModel, model.ID)
+	assert.NoError(t, result.Error)
+	assert.Equal(t, "Test Model", retrievedModel.Name)
+
+	var retrievedUser TestUser
+	result = dbConn.First(&retrievedUser, "id = ?", user.ID)
+	assert.NoError(t, result.Error)
+	assert.Equal(t, "test2@example.com", retrievedUser.Email)
+	assert.Equal(t, "hashedpassword2", retrievedUser.Password)
+	assert.True(t, retrievedUser.IsActive)
+
+	var retrievedClient TestAPIClient
+	result = dbConn.First(&retrievedClient, "id = ?", apiClient.ID)
+	assert.NoError(t, result.Error)
+	assert.Equal(t, "test-client-2", retrievedClient.ID)
+	assert.Equal(t, "test-secret-2", retrievedClient.Secret)
+	assert.Equal(t, "http://localhost:3001", retrievedClient.Domain)
+	assert.False(t, retrievedClient.IsPublic)
+	assert.Equal(t, "Test API Client 2", retrievedClient.Description)
+
+	// Test DropTables
+	err = pool.DropTables()
+	assert.NoError(t, err)
+
+	// Verify all tables were dropped
+	var modelCount int64
+	result = dbConn.Model(&TestModel{}).Count(&modelCount)
+	assert.Error(t, result.Error) // Should error because table doesn't exist
+
+	var userCount int64
+	result = dbConn.Model(&TestUser{}).Count(&userCount)
+	assert.Error(t, result.Error) // Should error because table doesn't exist
+
+	var clientCount int64
+	result = dbConn.Model(&TestAPIClient{}).Count(&clientCount)
+	assert.Error(t, result.Error) // Should error because table doesn't exist
+
+	// Test Close
+	err = pool.Close()
+	assert.NoError(t, err)
 }
