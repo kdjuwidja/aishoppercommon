@@ -170,3 +170,59 @@ func TestNewElasticsearchClient(t *testing.T) {
 		})
 	}
 }
+
+func TestElasticsearchClient_DeleteIndex(t *testing.T) {
+	client, err := NewElasticsearchClient("localhost", "10200")
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	// Cleanup before test
+	cleanupTestIndices(t, client)
+
+	// Ensure cleanup after test
+	defer cleanupTestIndices(t, client)
+
+	// First create a test index by indexing a document
+	testDoc := map[string]interface{}{
+		"title":   "Test Document",
+		"content": "This is a test document",
+	}
+	err = client.IndexDocument(context.Background(), "test-delete-index", testDoc)
+	require.NoError(t, err)
+
+	// Wait for the document to be indexed
+	time.Sleep(1 * time.Second)
+
+	tests := []struct {
+		name    string
+		index   string
+		wantErr bool
+	}{
+		{
+			name:    "successful index deletion",
+			index:   "test-delete-index",
+			wantErr: false,
+		},
+		{
+			name:    "delete non-existent index",
+			index:   "non-existent-index",
+			wantErr: true,
+		},
+		{
+			name:    "empty index name",
+			index:   "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := client.DeleteIndex(context.Background(), tt.index)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

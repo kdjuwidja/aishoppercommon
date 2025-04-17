@@ -89,3 +89,18 @@ func (es *ElasticsearchClient) SearchDocuments(ctx context.Context, index string
 
 	return documents, nil
 }
+
+// DeleteIndex deletes an index from Elasticsearch
+func (es *ElasticsearchClient) DeleteIndex(ctx context.Context, index string) error {
+	res, err := es.client.Indices.Delete([]string{index})
+	if err != nil {
+		return fmt.Errorf("error deleting index: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.IsError() {
+		return fmt.Errorf("error deleting index: %s", res.String())
+	}
+
+	return nil
+}
