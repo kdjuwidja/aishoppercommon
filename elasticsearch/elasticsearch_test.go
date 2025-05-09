@@ -11,15 +11,12 @@ import (
 )
 
 func cleanupTestIndices(t *testing.T, client *ElasticsearchClient) {
-	indices := []string{"test-index", "test-search-index", "empty-index"}
-	for _, index := range indices {
-		res, err := client.client.Indices.Delete([]string{index})
-		if err != nil {
-			t.Logf("Warning: Failed to delete index %s: %v", index, err)
-			continue
-		}
-		defer res.Body.Close()
+	res, err := client.client.Indices.Delete([]string{"_all"})
+	if err != nil {
+		t.Logf("Warning: Failed to delete all indices: %v", err)
+		return
 	}
+	defer res.Body.Close()
 }
 
 func TestElasticsearchClient_IndexDocument(t *testing.T) {
@@ -92,43 +89,43 @@ func TestElasticsearchClient_SearchDocuments(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		index   string
-		query   map[string]interface{}
+		query   *ESQuery
 		wantErr bool
 	}{
 		{
-			name:  "successful search",
-			index: "test-search-index",
-			query: map[string]interface{}{
+			name: "successful search",
+			query: CreateESQuery("test-search-index", map[string]interface{}{
 				"query": map[string]interface{}{
 					"match": map[string]interface{}{
 						"title": "Test",
 					},
 				},
-			},
+			}),
 			wantErr: false,
 		},
 		{
-			name:    "empty index name",
-			index:   "",
-			query:   map[string]interface{}{"query": map[string]interface{}{"match_all": map[string]interface{}{}}},
-			wantErr: false,
-		},
-		{
-			name:  "empty index search",
-			index: "empty-index",
-			query: map[string]interface{}{
+			name: "empty index name",
+			query: CreateESQuery("", map[string]interface{}{
 				"query": map[string]interface{}{
 					"match_all": map[string]interface{}{},
 				},
-			},
+			}),
+			wantErr: true,
+		},
+		{
+			name: "empty index search",
+			query: CreateESQuery("empty-index", map[string]interface{}{
+				"query": map[string]interface{}{
+					"match_all": map[string]interface{}{},
+				},
+			}),
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			docs, err := client.SearchDocuments(context.Background(), tt.index, tt.query)
+			docs, err := client.SearchDocuments(context.Background(), tt.query)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, docs)
@@ -225,4 +222,78 @@ func TestElasticsearchClient_DeleteIndex(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestElasticsearchClient_Msearch(t *testing.T) {
+	client, err := NewElasticsearchClient("localhost", "10200")
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	// Cleanup before test
+	cleanupTestIndices(t, client)
+
+	// First index test documents in different indices
+	testDocs := []struct {
+		index string
+		doc   map[string]interface{}
+	}{
+		{
+			index: "test-msearch-index-1",
+			doc: map[string]interface{}{
+				"title":   "Test Document 1",
+				"content": "This is the first test document",
+			},
+		},
+		{
+			index: "test-msearch-index-2",
+			doc: map[string]interface{}{
+				"title":   "Test Document 2",
+				"content": "This is the second test document",
+			},
+		},
+	}
+
+	for _, testDoc := range testDocs {
+		err := client.IndexDocument(context.Background(), testDoc.index, testDoc.doc)
+		require.NoError(t, err)
+	}
+
+	// Wait for the documents to be indexed
+	time.Sleep(1 * time.Second)
+
+	// Create a multi-search query that searches across different indices
+	mquery := CreateMQuery()
+	mquery.AddQuery(CreateESQuery("test-msearch-index-1", map[string]interface{}{
+		"query": map[string]interface{}{
+			"match": map[string]interface{}{
+				"title": "Document 1",
+			},
+		},
+	}))
+	mquery.AddQuery(CreateESQuery("test-msearch-index-2", map[string]interface{}{
+		"query": map[string]interface{}{
+			"match": map[string]interface{}{
+				"title": "Document 2",
+			},
+		},
+	}))
+
+	// Execute the multi-search
+	results, err := client.SearchDocumentsWithQuery(context.Background(), "test-msearch-index-1", mquery)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+
+	// Verify first query results from first index
+	assert.Len(t, results[0], 1)
+	var doc1 map[string]interface{}
+	err = json.Unmarshal(results[0][0], &doc1)
+	assert.NoError(t, err)
+	assert.Equal(t, "Test Document 1", doc1["title"])
+
+	// Verify second query results from second index
+	assert.Len(t, results[1], 1)
+	var doc2 map[string]interface{}
+	err = json.Unmarshal(results[1][0], &doc2)
+	assert.NoError(t, err)
+	assert.Equal(t, "Test Document 2", doc2["title"])
 }
