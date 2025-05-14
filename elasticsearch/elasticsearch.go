@@ -99,7 +99,7 @@ func (es *ElasticsearchClient) SearchDocuments(ctx context.Context, query *ESQue
 }
 
 // SearchDocumentsWithQuery performs a multi-search query in Elasticsearch
-func (es *ElasticsearchClient) SearchDocumentsWithQuery(ctx context.Context, index string, query *MultiESQuery) ([][]json.RawMessage, error) {
+func (es *ElasticsearchClient) SearchDocumentsWithMQuery(ctx context.Context, index string, query *MultiESQuery) ([][]json.RawMessage, error) {
 	buffer, err := query.createMQueryBuffer(index)
 	if err != nil {
 		return nil, fmt.Errorf("error preparing multi-search request: %w", err)

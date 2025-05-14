@@ -245,10 +245,24 @@ func TestElasticsearchClient_Msearch(t *testing.T) {
 			},
 		},
 		{
+			index: "test-msearch-index-1",
+			doc: map[string]interface{}{
+				"title":   "Test Document 1A",
+				"content": "This is another test document",
+			},
+		},
+		{
 			index: "test-msearch-index-2",
 			doc: map[string]interface{}{
 				"title":   "Test Document 2",
 				"content": "This is the second test document",
+			},
+		},
+		{
+			index: "test-msearch-index-2",
+			doc: map[string]interface{}{
+				"title":   "Test Document 2A",
+				"content": "This is another second test document",
 			},
 		},
 	}
@@ -263,37 +277,68 @@ func TestElasticsearchClient_Msearch(t *testing.T) {
 
 	// Create a multi-search query that searches across different indices
 	mquery := CreateMQuery()
-	mquery.AddQuery(CreateESQuery("test-msearch-index-1", map[string]interface{}{
-		"query": map[string]interface{}{
-			"match": map[string]interface{}{
-				"title": "Document 1",
+	queries := []struct {
+		index           string
+		query           map[string]interface{}
+		expectedResults int
+	}{
+		{
+			index: "test-msearch-index-1",
+			query: map[string]interface{}{
+				"query": map[string]interface{}{
+					"match": map[string]interface{}{
+						"title": "Test Document",
+					},
+				},
 			},
+			expectedResults: 2,
 		},
-	}))
-	mquery.AddQuery(CreateESQuery("test-msearch-index-2", map[string]interface{}{
-		"query": map[string]interface{}{
-			"match": map[string]interface{}{
-				"title": "Document 2",
+		{
+			index: "test-msearch-index-2",
+			query: map[string]interface{}{
+				"query": map[string]interface{}{
+					"match": map[string]interface{}{
+						"title": "Document 2",
+					},
+				},
 			},
+			expectedResults: 2,
 		},
-	}))
+		{
+			index: "test-msearch-index-1",
+			query: map[string]interface{}{
+				"query": map[string]interface{}{
+					"match": map[string]interface{}{
+						"content": "test document",
+					},
+				},
+			},
+			expectedResults: 2,
+		},
+	}
+
+	// Add all queries to the multi-search request
+	for _, q := range queries {
+		mquery.AddQuery(CreateESQuery(q.index, q.query))
+	}
+
+	mquery.PrintQuery("test-msearch-index-1")
 
 	// Execute the multi-search
-	results, err := client.SearchDocumentsWithQuery(context.Background(), "test-msearch-index-1", mquery)
+	results, err := client.SearchDocumentsWithMQuery(context.Background(), "test-msearch-index-1", mquery)
 	require.NoError(t, err)
-	require.Len(t, results, 2)
 
-	// Verify first query results from first index
-	assert.Len(t, results[0], 1)
-	var doc1 map[string]interface{}
-	err = json.Unmarshal(results[0][0], &doc1)
-	assert.NoError(t, err)
-	assert.Equal(t, "Test Document 1", doc1["title"])
+	// Verify that the number of results matches the number of queries
+	require.Len(t, results, len(queries), "Number of result sets should match number of queries")
 
-	// Verify second query results from second index
-	assert.Len(t, results[1], 1)
-	var doc2 map[string]interface{}
-	err = json.Unmarshal(results[1][0], &doc2)
-	assert.NoError(t, err)
-	assert.Equal(t, "Test Document 2", doc2["title"])
+	// Verify results for each query
+	for i, q := range queries {
+		assert.Len(t, results[i], q.expectedResults, "Query %d should return %d results", i+1, q.expectedResults)
+
+		// Verify the content of the first result for each query
+		var doc map[string]interface{}
+		err = json.Unmarshal(results[i][0], &doc)
+		assert.NoError(t, err)
+		assert.Contains(t, doc["title"], "Test Document")
+	}
 }
