@@ -381,3 +381,68 @@ func TestMQuery_CreateMQueryBuffer(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateESQueryStr(t *testing.T) {
+	tests := []struct {
+		name     string
+		index    string
+		queryStr string
+		want     *ESQuery
+		wantErr  bool
+	}{
+		{
+			name:  "valid JSON query",
+			index: "test-index",
+			queryStr: `{
+				"query": {
+					"match": {
+						"title": "test"
+					}
+				}
+			}`,
+			want: &ESQuery{
+				index: "test-index",
+				query: map[string]interface{}{
+					"query": map[string]interface{}{
+						"match": map[string]interface{}{
+							"title": "test",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:     "empty index",
+			index:    "",
+			queryStr: `{"query": {"match_all": {}}}`,
+			want:     nil,
+			wantErr:  true,
+		},
+		{
+			name:     "invalid JSON",
+			index:    "test-index",
+			queryStr: `{"query": {"match": "test"`, // malformed JSON
+			want:     nil,
+			wantErr:  true,
+		},
+		{
+			name:     "empty query string",
+			index:    "test-index",
+			queryStr: "",
+			want:     nil,
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CreateESQueryStr(tt.index, tt.queryStr)
+			if tt.wantErr {
+				assert.Nil(t, got)
+			} else {
+				assert.Equal(t, tt.want, got)
+			}
+		})
+	}
+}

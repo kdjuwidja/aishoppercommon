@@ -22,6 +22,21 @@ func CreateESQuery(index string, query map[string]interface{}) *ESQuery {
 	}
 }
 
+func CreateESQueryStr(index string, queryStr string) *ESQuery {
+	if index == "" {
+		return nil
+	}
+
+	query := make(map[string]interface{})
+	if err := json.Unmarshal([]byte(queryStr), &query); err != nil {
+		return nil
+	}
+	return &ESQuery{
+		index: index,
+		query: query,
+	}
+}
+
 func (q *ESQuery) appendBufferForMQuery(index string, buffer *bytes.Buffer) error {
 	if index == "" {
 		return fmt.Errorf("index name cannot be empty")
